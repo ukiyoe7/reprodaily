@@ -1,0 +1,64 @@
+library(DBI)
+library(magrittr)
+library(tidyverse)
+
+con2 <- dbConnect(odbc::odbc(), "reproreplica", timeout = 10)
+
+
+#CURRENT MONTH
+
+result_cli <- dbGetQuery(con2,"
+  
+WITH FIS AS (SELECT FISCODIGO FROM TBFIS WHERE FISTPNATOP IN ('V','R','SR')),
+
+PED AS (SELECT ID_PEDIDO,PEDID.CLICODIGO FROM PEDID 
+INNER JOIN FIS ON PEDID.FISCODIGO1=FIS.FISCODIGO
+   WHERE PEDDTBAIXA BETWEEN '01.07.2022' AND '31.07.2022' AND 
+     PEDSITPED<>'C' AND 
+      PEDLCFINANC IN ('S', 'L','N') AND
+        CLICODIGO IN (4208
+        ))
+
+SELECT CLICODIGO,SUM(PDPUNITLIQUIDO*PDPQTDADE)VRVENDA 
+ FROM PDPRD PD
+  INNER JOIN PED P ON P.ID_PEDIDO=PD.ID_PEDIDO
+  GROUP BY 1
+
+")
+
+result_cli %>% summarize(v=sum(VRVENDA))
+
+View(result_cli)
+
+
+## GRUPO ==========================================================
+
+
+result_grupo <- dbGetQuery(con2,"
+
+WITH FIS AS (SELECT FISCODIGO FROM TBFIS WHERE FISTPNATOP IN ('V','R','SR')),
+
+PED AS (SELECT ID_PEDIDO,PEDDTBAIXA,PEDID.CLICODIGO FROM PEDID 
+INNER JOIN FIS ON PEDID.FISCODIGO1=FIS.FISCODIGO
+   WHERE PEDDTBAIXA BETWEEN '01.06.2022' AND '31.07.2022' AND 
+     PEDSITPED<>'C' AND 
+      PEDLCFINANC IN ('S', 'L','N') AND
+        CLICODIGO IN (SELECT CLICODIGO FROM CLIEN WHERE GCLCODIGO=139))
+
+SELECT PEDDTBAIXA,CLICODIGO,SUM(PDPUNITLIQUIDO*PDPQTDADE)VRVENDA 
+ FROM PDPRD PD
+  INNER JOIN PED P ON P.ID_PEDIDO=PD.ID_PEDIDO
+  GROUP BY 1,2
+
+")
+
+result_grupo %>% summarize(v=sum(VRVENDA))
+
+
+result_grupo %>% group_by(MES=floor_date(PEDDTBAIXA,"month")) %>% summarize(v=sum(VRVENDA)) %>% View()
+
+
+
+View(result_grupo)
+
+
